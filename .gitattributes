@@ -1,0 +1,10 @@
+# Tudo que e texto vai com LF (os scripts rodam no Linux da JACI, mesmo editados no Windows)
+* text=auto eol=lf
+
+*.nc     binary
+*.grib2  binary
+*.bin    binary
+*.DBL    binary
+*.exe    binary
+*.png    binary
+*.pdf    binary

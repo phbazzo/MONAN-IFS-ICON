@@ -1,0 +1,26 @@
+# Gerados pela instalacao e pelas rodadas (nao vao para o git) -------------------
+/datain/
+/dataout/
+/sources/
+/execs/
+/run.*/
+/scripts/GF_ConvPar_nml
+/scripts/scripts.antes_*/
+
+# Dados ------------------------------------------------------------------------
+*.nc
+*.nc4
+*.grib
+*.grib2
+*.grb2
+*.bz2
+*.h5
+*.log
+*.orig
+
+# Python / editores --------------------------------------------------------------
+__pycache__/
+*.pyc
+.vscode/
+*.swp
+*~

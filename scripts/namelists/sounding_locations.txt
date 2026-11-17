@@ -1,0 +1,6 @@
+-25.52 -54.58 83827_FozIguacu
+-25.52 -49.17 83840_Curitiba
+-27.67 -48.55 83899_Florianopolis
+-29.70 -53.70 83937_SantaMaria
+-30.00 -51.18 83971_PortoAlegre
+
