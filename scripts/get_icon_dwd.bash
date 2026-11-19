@@ -22,6 +22,7 @@ umask 022
 #        do namelist.init_atmosphere.TEMPLATE). Vai so UM nivel acima do topo.
 #        Ao mudar algum deles, apague o model_levels.txt da rodada.
 #
+#     Arquivos que falham sao baixados de novo ate ICON_RETRIES vezes (padrao 3).
 #     Rodar de novo e seguro: arquivos completos nao sao baixados outra vez
 #     (wget -c) e, depois de um download completo (marcador download_ok), o
 #     DWD nem e consultado.
@@ -238,13 +239,28 @@ done
 #----------------------------------------------------------------------
 
 echo -e "${GREEN}==>${NC} Downloading $(wc -l < ${urls}) ICON files to ${OUT} ...\n"
-xargs -P ${NPROC} -n 1 wget -q -c -P ${OUT} < ${urls}
-
-# Confere se veio tudo (horarios que ainda nao sairam no DWD tambem aparecem aqui)
-nmiss=0
-while read url; do
-   if [ ! -s ${OUT}/$(basename ${url}) ]; then echo "Missing: ${url}"; nmiss=$((nmiss + 1)); fi
-done < ${urls}
+# Com ~10 mil arquivos e NPROC conexoes, sempre falha um ou outro (erro passageiro do DWD/rede).
+# Ate ICON_RETRIES novas passadas so com os que faltam, com menos conexoes e uma pausa entre elas.
+missing=${OUT}/urls_missing.txt
+todo=${urls}; nproc=${NPROC}
+for ((pass=0; pass<=${ICON_RETRIES:-3}; pass++)); do
+   if [ ${pass} -gt 0 ]
+   then
+      echo -e "${GREEN}==>${NC} Retry ${pass}: $(wc -l < ${missing}) files missing, downloading again in 20 s..."
+      sleep 20; todo=${missing}; nproc=8
+   fi
+   xargs -P ${nproc} -n 1 wget -q -c --tries=3 --timeout=60 -P ${OUT} < ${todo}
+   # Confere se veio tudo (horarios que ainda nao sairam no DWD tambem aparecem aqui)
+   : > ${missing}.new
+   while read url; do
+      if [ ! -s ${OUT}/$(basename ${url}) ]; then echo "${url}" >> ${missing}.new; fi
+   done < ${urls}
+   mv ${missing}.new ${missing}
+   [ -s ${missing} ] || break
+done
+nmiss=$(wc -l < ${missing})
+sed 's/^/Missing: /' ${missing}
+rm -f ${missing}
 nlev=$(grep -c "_${sfff}_[0-9]*_T\.grib2" ${urls})
 nsoil=$(grep -c "soil-level_${YYYYMMDDHHi}_${soilfff}_" ${urls})
 if [ ${nmiss} -ne 0 ] || [ ${nlev} -eq 0 ] || [ ${nsoil} -eq 0 ]
