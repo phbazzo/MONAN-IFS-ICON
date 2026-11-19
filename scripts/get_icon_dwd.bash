@@ -26,6 +26,13 @@ umask 022
 #     (wget -c) e, depois de um download completo (marcador download_ok), o
 #     DWD nem e consultado.
 #     ICON_VCOORD=pressure: os 18 niveis de pressao do opendata.
+#
+#     CI "no futuro" (previsao do ICON como CI): ICON_START=H baixa so os prazos
+#     H a FCST (FCST = ultimo prazo, contado desde LABELI) e solo/neve/gelo no
+#     prazo ICON_SOIL_LEAD (padrao = ICON_START). Normalmente chamado pelo
+#     2.pre_processing.bash com ICON_RUN; ex.: CI em 2026112100 a partir da
+#     rodada 2026111900, previsao de 24 h:
+#        ICON_START=48 ./get_icon_dwd.bash 2026111900 72
 #-----------------------------------------------------------------------------#
 
 if [ $# -ne 2 ]
@@ -66,7 +73,16 @@ HHLDIR=${DATAIN}/fixed/icon_hhl
 NPROC=${ICON_NPROC:-32}
 VCOORD=${ICON_VCOORD:-model}
 PYTHON=$(find_python) || exit 1   # numpy + eccodes (ICON_PYTHON ou ambiente conda; ver setenv.bash)
-if [[ $MODERUN == "R" ]]; then dt=$((LBCINT / 3600)); else FCST=0; dt=1; fi
+START=${ICON_START:-0}             # primeiro prazo (h) = CI; > 0: previsao do ICON como CI
+SOILLEAD=${ICON_SOIL_LEAD:-${START}}
+if [[ $MODERUN == "R" ]]; then dt=$((LBCINT / 3600)); else FCST=${START}; dt=1; fi
+if [ ${START} -lt 0 ] || [ ${START} -gt ${FCST} ] || [ $((START % dt)) -ne 0 ]
+then
+   echo -e "${RED}==>${NC} ICON_START=${START} must be >= 0, <= FCST (${FCST}) and a multiple of ${dt} h."
+   exit 1
+fi
+sfff=$(printf "%03d" ${START})
+soilfff=$(printf "%03d" ${SOILLEAD})
 
 # pasta no DWD:variavel
 PL="t:T u:U v:V relhum:RELHUM fi:FI"
@@ -79,16 +95,19 @@ TI="hsurf:HSURF fr_land:FR_LAND"
 
 
 # Rodada ja baixada por completo? O marcador download_ok (gravado no fim deste script) guarda
-# "FCST DT VCOORD". Se cobre o pedido (mesmo DT e VCOORD, FCST >= o pedido) e os niveis escolhidos
-# continuam la, nao consulta o DWD: o pre-processamento pode ser refeito depois que a rodada saiu do
-# opendata (~24 h). Para forcar um novo download, apague ${OUT}/download_ok.
+# "FCST DT VCOORD START SOILLEAD" (marcadores antigos: so os 3 primeiros, START = SOILLEAD = 0).
+# Se cobre o pedido (mesmo DT e VCOORD, prazos START..FCST dentro dos baixados, solo no mesmo prazo)
+# e os niveis escolhidos continuam la, nao consulta o DWD: o pre-processamento pode ser refeito depois
+# que a rodada saiu do opendata (~24 h). Para forcar um novo download, apague ${OUT}/download_ok.
 if [ -s ${OUT}/download_ok ]
 then
-   read mfcst mdt mvcoord < ${OUT}/download_ok
+   read mfcst mdt mvcoord mstart msoil < ${OUT}/download_ok
+   mstart=${mstart:-0}; msoil=${msoil:-0}
    if [[ ${mdt} == ${dt} && ${mvcoord} == ${VCOORD} && ${mfcst} -ge ${FCST} ]] && \
+      [[ ${mstart} -le ${START} && $(((START - mstart) % dt)) -eq 0 && ${msoil} -eq ${SOILLEAD} ]] && \
       [[ ${VCOORD} != "model" || -s ${OUT}/model_levels.txt ]]
    then
-      echo -e "${GREEN}==>${NC} ICON ${YYYYMMDDHHi} (+${mfcst} h, ${VCOORD} levels) already downloaded in ${OUT}. Skipping download.\n"
+      echo -e "${GREEN}==>${NC} ICON ${YYYYMMDDHHi} (+${mstart} to +${mfcst} h, soil at +${msoil} h, ${VCOORD} levels) already downloaded in ${OUT}. Skipping download.\n"
       exit 0
    fi
 fi
@@ -182,7 +201,7 @@ for item in ${TI}; do
 done
 if [[ ${VCOORD} == "model" ]]
 then
-   for ((hour=0; hour<=FCST; hour+=dt)); do
+   for ((hour=START; hour<=FCST; hour+=dt)); do
       fff=$(printf "%03d" ${hour})
       for item in ${ML}; do
          for k in ${MLEVELS}; do
@@ -194,19 +213,25 @@ else
    for item in ${PL}; do
       for f in $(listing ${item%%:*} pressure-level ${item##*:}); do
          fff=$(echo ${f} | awk -F_ '{print $6}')
-         if [ $((10#${fff} % dt)) -eq 0 ] && [ $((10#${fff})) -le ${FCST} ]; then echo "${BASEURL}/${item%%:*}/${f}" >> ${urls}; fi
+         if [ $(((10#${fff} - START) % dt)) -eq 0 ] && [ $((10#${fff})) -ge ${START} ] && [ $((10#${fff})) -le ${FCST} ]
+         then
+            echo "${BASEURL}/${item%%:*}/${f}" >> ${urls}
+         fi
       done
    done
 fi
+# Solo, neve e gelo: so no prazo da CI (SOILLEAD)
 for item in ${SOIL0}; do
-   for f in $(listing ${item%%:*} soil-level ${item##*:} | grep "_${YYYYMMDDHHi}_000_"); do
+   for f in $(listing ${item%%:*} soil-level ${item##*:} | grep "_${YYYYMMDDHHi}_${soilfff}_"); do
       echo "${BASEURL}/${item%%:*}/${f}" >> ${urls}
    done
 done
-for ((hour=0; hour<=FCST; hour+=dt)); do
+for item in ${SL0}; do
+   echo "${BASEURL}/${item%%:*}/icon_global_icosahedral_single-level_${YYYYMMDDHHi}_${soilfff}_${item##*:}.grib2.bz2" >> ${urls}
+done
+for ((hour=START; hour<=FCST; hour+=dt)); do
    fff=$(printf "%03d" ${hour})
-   vars=${SL}; [ ${hour} -eq 0 ] && vars="${SL} ${SL0}"
-   for item in ${vars}; do
+   for item in ${SL}; do
       echo "${BASEURL}/${item%%:*}/icon_global_icosahedral_single-level_${YYYYMMDDHHi}_${fff}_${item##*:}.grib2.bz2" >> ${urls}
    done
 done
@@ -220,13 +245,14 @@ nmiss=0
 while read url; do
    if [ ! -s ${OUT}/$(basename ${url}) ]; then echo "Missing: ${url}"; nmiss=$((nmiss + 1)); fi
 done < ${urls}
-nlev=$(grep -c "_000_[0-9]*_T\.grib2" ${urls})
-if [ ${nmiss} -ne 0 ] || [ ${nlev} -eq 0 ]
+nlev=$(grep -c "_${sfff}_[0-9]*_T\.grib2" ${urls})
+nsoil=$(grep -c "soil-level_${YYYYMMDDHHi}_${soilfff}_" ${urls})
+if [ ${nmiss} -ne 0 ] || [ ${nlev} -eq 0 ] || [ ${nsoil} -eq 0 ]
 then
-   echo -e "\n${RED}==>${NC} ${nmiss} files missing (${VCOORD} levels of T at 000: ${nlev}). Run again to resume.\n"
+   echo -e "\n${RED}==>${NC} ${nmiss} files missing (${VCOORD} levels of T at ${sfff}: ${nlev}; soil files at ${soilfff}: ${nsoil}). Run again to resume.\n"
    exit 1
 fi
 
 rm -f ${urls}
-echo "${FCST} ${dt} ${VCOORD}" > ${OUT}/download_ok
-echo -e "\n${GREEN}==>${NC} ICON ${YYYYMMDDHHi} (+${FCST} h) downloaded: $(du -sh ${OUT} | cut -f1) in ${OUT}\n"
+echo "${FCST} ${dt} ${VCOORD} ${START} ${SOILLEAD}" > ${OUT}/download_ok
+echo -e "\n${GREEN}==>${NC} ICON ${YYYYMMDDHHi} (+${START} to +${FCST} h, soil at +${SOILLEAD} h) downloaded: $(du -sh ${OUT} | cut -f1) in ${OUT}\n"

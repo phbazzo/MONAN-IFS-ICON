@@ -53,7 +53,17 @@ OUTRUN=${DATAOUT}/${YYYYMMDDHHi}/${RUNNAME}
 # Local variables--------------------------------------
 start_date=${YYYYMMDDHHi:0:4}-${YYYYMMDDHHi:4:2}-${YYYYMMDDHHi:6:2}_${YYYYMMDDHHi:8:2}:00:00
 export DIRRUN=${DIRHOMED}/run.${YYYYMMDDHHi}.${RUNNAME}; rm -fr ${DIRRUN}; mkdir -p ${DIRRUN}
-BNDDIR=${DATAIN}/ICON/${YYYYMMDDHHi}
+# ICON_RUN: rodada do ICON usada (padrao = LABELI). Se for anterior ao LABELI, a CI e a PREVISAO do
+# ICON valida em LABELI (prazo START = LABELI - ICON_RUN), ex.: ICON_RUN=2026111900 com LABELI=2026112100
+ICONRUN=${ICON_RUN:-${YYYYMMDDHHi}}
+START=$(( ( $(date -u -d "${YYYYMMDDHHi:0:8} ${YYYYMMDDHHi:8:2}:00" +%s) - $(date -u -d "${ICONRUN:0:8} ${ICONRUN:8:2}:00" +%s) ) / 3600 ))
+if [ ${START} -lt 0 ]
+then
+   echo -e "${RED}==>${NC} ICON_RUN=${ICONRUN} is after LABELI=${YYYYMMDDHHi}."
+   exit -1
+fi
+SOILLEAD=${ICON_SOIL_LEAD:-${START}}
+BNDDIR=${DATAIN}/ICON/${ICONRUN}
 ICONCDO=${DATAIN}/fixed/icon_cdo
 HHLDIR=${DATAIN}/fixed/icon_hhl
 VCOORD=${ICON_VCOORD:-model}   # model (niveis do modelo do ICON) ou pressure (18 niveis de pressao)
@@ -78,8 +88,8 @@ NPROC=${ICON_NPROC:-8}
 #-------------------------------------------------------
 mkdir -p ${OUTRUN}/Pre/logs
 
-# O ICON e baixado antes, com ./get_icon_dwd.bash ${YYYYMMDDHHi} ${FCST}
-files_needed=("${SCRIPTS}/icon2wps.py" "${ICONCDO}/target_grid.txt" "${ICONCDO}/weights.nc" "${BNDDIR}/icon_global_icosahedral_time-invariant_${YYYYMMDDHHi}_HSURF.grib2.bz2")
+# O ICON e baixado antes, com ICON_START=${START} ./get_icon_dwd.bash ${ICONRUN} $((START + FCST))
+files_needed=("${SCRIPTS}/icon2wps.py" "${ICONCDO}/target_grid.txt" "${ICONCDO}/weights.nc" "${BNDDIR}/icon_global_icosahedral_time-invariant_${ICONRUN}_HSURF.grib2.bz2")
 if [[ ${VCOORD} == "model" ]]; then files_needed+=("${BNDDIR}/model_levels.txt"); fi
 for file in "${files_needed[@]}"
 do
@@ -87,7 +97,7 @@ do
   then
     echo -e  "\n${RED}==>${NC} ***** ATTENTION *****\n"
     echo -e  "${RED}==>${NC} [${0}] At least the file ${file} was not found. \n"
-    echo -e  "${RED}==>${NC} Run first: ./get_icon_dwd.bash ${YYYYMMDDHHi} ${FCST} \n"
+    echo -e  "${RED}==>${NC} Run first: ICON_START=${START} ./get_icon_dwd.bash ${ICONRUN} $((START + FCST)) \n"
     exit -1
   fi
 done
@@ -107,9 +117,15 @@ else
    exit -1
 fi
 
+if [ ${START} -gt 0 ]
+then
+   echo -e "${GREEN}==>${NC} Initial condition = ICON ${ICONRUN} forecast at +${START} h (valid ${YYYYMMDDHHi}); soil/snow/ice at +${SOILLEAD} h\n"
+fi
+
 # CDO remap + conversao para intermediarios do WPS (faz o papel do ungrib)
 cd ${DIRRUN}
-time ${PYTHON} ${SCRIPTS}/icon2wps.py --indir ${BNDDIR} --run ${YYYYMMDDHHi} \
+time ${PYTHON} ${SCRIPTS}/icon2wps.py --indir ${BNDDIR} --run ${ICONRUN} \
+   --start ${START} --soil-lead ${SOILLEAD} \
    --fcst ${fcst} --step $((LBCINT / 3600)) \
    --grid ${ICONCDO}/target_grid.txt --weights ${ICONCDO}/weights.nc --box="${box}" \
    --vcoord ${VCOORD} --hhl-dir ${HHLDIR} \

@@ -24,9 +24,14 @@
 #
 #     Requer: numpy, eccodes (python) e cdo.
 #
+#     --start H: usa a PREVISAO de +H h do ICON como condicao inicial (CI "no
+#     futuro"): converte os prazos H, H+step, ..., H+fcst. Solo, neve e gelo
+#     vem do prazo --soil-lead (padrao = --start).
+#
 # !CALLING SEQUENCE:
 #     icon2wps.py --indir DIR --run YYYYMMDDHH --fcst 48 --step 3 \
 #                 --grid target_grid.txt --weights weights.nc --outdir DIR
+#     icon2wps.py ... --run 2026111900 --start 48 --fcst 24   # CI em 2026112100
 #
 #-----------------------------------------------------------------------------#
 
@@ -67,7 +72,11 @@ def parse_args():
     p = argparse.ArgumentParser(description="ICON (DWD opendata) -> intermediarios do WPS")
     p.add_argument("--indir", required=True, help="pasta com os *.grib2.bz2 da rodada")
     p.add_argument("--run", required=True, help="rodada do ICON (YYYYMMDDHH)")
-    p.add_argument("--fcst", type=int, default=0, help="horas de previsao (0 = so a CI)")
+    p.add_argument("--fcst", type=int, default=0, help="horas de previsao a partir de --start (0 = so a CI)")
+    p.add_argument("--start", type=int, default=0,
+                   help="prazo do ICON (h) usado como CI: 0 = analise; >0 = previsao do ICON como CI")
+    p.add_argument("--soil-lead", type=int,
+                   help="prazo do ICON (h) de onde vem solo, neve e gelo da CI (padrao = --start)")
     p.add_argument("--step", type=int, default=3, help="intervalo entre horarios (h)")
     p.add_argument("--grid", required=True, help="grade de destino do CDO (target_grid*.txt)")
     p.add_argument("--weights", required=True, help="pesos de remapeamento do CDO (weights*.nc)")
@@ -182,18 +191,20 @@ def level_of(path, native):
     return read_level(native)
 
 
-def find_jobs(args, fff):
-    """Lista (variavel, arquivo) de um horario; aborta se faltar algum arquivo."""
+def find_jobs(args, fff, initial=False):
+    """Lista (variavel, arquivo) de um horario; aborta se faltar algum arquivo.
+    Na CI (initial) inclui solo, neve e gelo, lidos do prazo --soil-lead."""
     if args.vcoord == "model":
-        groups = [("model-level", ML_VARS), ("single-level", SL_VARS)]
+        groups = [("model-level", ML_VARS, fff), ("single-level", SL_VARS, fff)]
     else:
-        groups = [("pressure-level", list(PL_VARS)), ("single-level", SL_VARS)]
-    if fff == "000":
-        groups += [("single-level", SL0_VARS), ("soil-level", SOIL_VARS)]
+        groups = [("pressure-level", list(PL_VARS), fff), ("single-level", SL_VARS, fff)]
+    if initial:
+        sfff = f"{args.soil_lead:03d}"
+        groups += [("single-level", SL0_VARS, sfff), ("soil-level", SOIL_VARS, sfff)]
     jobs, missing = [], []
-    for kind, variables in groups:
+    for kind, variables, lead in groups:
         for var in variables:
-            pattern = os.path.join(args.indir, file_name(args.run, kind, var, fff))
+            pattern = os.path.join(args.indir, file_name(args.run, kind, var, lead))
             files = sorted(glob.glob(pattern))
             if not files:
                 missing.append(pattern)
@@ -399,6 +410,14 @@ def write_field(f, hdate, geo, field, units, desc, xlvl, slab):
 def main():
     args = parse_args()
     run = dt.datetime.strptime(args.run, "%Y%m%d%H")
+    if args.start < 0:
+        sys.exit("--start deve ser >= 0")
+    if args.soil_lead is None:
+        args.soil_lead = args.start
+    if args.start > 0:
+        print(f"CI = previsao de +{args.start} h do ICON {args.run} "
+              f"(valida em {run + dt.timedelta(hours=args.start):%Y-%m-%d_%H}); "
+              f"solo/neve/gelo de +{args.soil_lead} h", flush=True)
     os.makedirs(args.outdir, exist_ok=True)
     tmpdir = tempfile.mkdtemp(prefix="icon2wps_", dir=args.outdir)
     try:
@@ -412,7 +431,8 @@ def main():
             if args.vcoord == "model":
                 if not args.hhl_dir:
                     sys.exit("--hhl-dir e obrigatorio com --vcoord model")
-                t0 = glob.glob(os.path.join(args.indir, file_name(args.run, "model-level", "T", "000")))
+                t0 = glob.glob(os.path.join(args.indir, file_name(args.run, "model-level", "T",
+                                                                  f"{args.start:03d}")))
                 levels = sorted(int(os.path.basename(f).split("_")[6]) for f in t0)
                 if not levels:
                     sys.exit(f"Nenhum arquivo de T nos niveis do modelo em {args.indir}")
@@ -432,11 +452,11 @@ def main():
                   "LANDSEA": (np.nan_to_num(res["FR_LAND"][0][1]) >= 0.5).astype(np.float32)}
             hhl = {level[0]: field for level, field in res.get("HHL", [])}
 
-            for hour in range(0, args.fcst + 1, args.step):
+            for hour in range(args.start, args.start + args.fcst + 1, args.step):
                 fff = f"{hour:03d}"
                 valid = run + dt.timedelta(hours=hour)
                 hdate = f"{valid:%Y-%m-%d_%H}:00:00"
-                jobs = find_jobs(args, fff)
+                jobs = find_jobs(args, fff, initial=(hour == args.start))
                 print(f"{hdate}: remapeando {len(jobs)} arquivos ...", flush=True)
                 res, geo = process(pool, args, jobs, tmpdir)
                 if geo != geo_ti:
@@ -446,7 +466,7 @@ def main():
                     fields, nlev = model_fields(res, hhl)
                 else:
                     fields, nlev = pressure_fields(res)
-                fields += surface_fields(res, ti, initial=(hour == 0))
+                fields += surface_fields(res, ti, initial=(hour == args.start))
 
                 out = os.path.join(args.outdir, f"{args.prefix}:{valid:%Y-%m-%d_%H}")
                 with open(out, "wb") as f:

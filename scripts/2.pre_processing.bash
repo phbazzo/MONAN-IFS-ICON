@@ -44,6 +44,11 @@ then
    echo "                            com 'export IFS_SOURCE=aws' (arquivo desde 2023)."
    echo "   Arquivos ja baixados em datain/ICON|IFS/LABELI sao reaproveitados."
    echo ""
+   echo "CI 'no futuro' com a PREVISAO do ICON (ICON_RUN = rodada do ICON, anterior ao LABELI):"
+   echo "   ICON_RUN=2026111900 ${0} ICON 223909_3SUL 2026112100 24"
+   echo "   -> CI = previsao de +48 h da rodada 2026111900; LBCs = +48 a +72 h da mesma rodada."
+   echo "   Solo/neve/gelo vem do mesmo prazo (+48 h); ICON_SOIL_LEAD=0 usa os da analise da rodada."
+   echo ""
    exit
 fi
 
@@ -98,15 +103,28 @@ git log | head -1
 # Download do ICON/IFS (antes de tudo: se a rodada nao estiver disponivel, para aqui)
 if [[ ${EXP} == "ICON" || ${EXP} == "IFS" ]]
 then
-   if [[ ! ${hhi} =~ ^(00|06|12|18)$ ]]
+   # Rodada da fonte: ICON_RUN (so ICON) pode ser anterior ao LABELI -> CI = previsao do ICON
+   SRCRUN=${YYYYMMDDHHi}
+   if [[ ${EXP} == "ICON" && -n "${ICON_RUN}" ]]; then SRCRUN=${ICON_RUN}; fi
+   if [[ ! ${SRCRUN} =~ ^[0-9]{8}(00|06|12|18)$ ]]
    then
-      echo -e "\n${RED}==>${NC} ${EXP}: LABELI must be a 00, 06, 12 or 18 UTC run (got ${YYYYMMDDHHi}).\n"
+      echo -e "\n${RED}==>${NC} ${EXP}: the source run must be YYYYMMDDHH at 00, 06, 12 or 18 UTC (got ${SRCRUN}).\n"
       exit -1
    fi
-   age=$(( ( $(date -u +%s) - $(date -u -d "${yyyymmddi} ${hhi}:00" +%s) ) / 3600 ))
+   START=$(( ( $(date -u -d "${yyyymmddi} ${hhi}:00" +%s) - $(date -u -d "${SRCRUN:0:8} ${SRCRUN:8:2}:00" +%s) ) / 3600 ))
+   if [ ${START} -lt 0 ]
+   then
+      echo -e "\n${RED}==>${NC} ICON_RUN=${SRCRUN} is after LABELI=${YYYYMMDDHHi}.\n"
+      exit -1
+   fi
+   if [ ${START} -gt 0 ]
+   then
+      echo -e "${GREEN}==>${NC} Initial condition = ICON ${SRCRUN} forecast at +${START} h (valid ${YYYYMMDDHHi})\n"
+   fi
+   age=$(( ( $(date -u +%s) - $(date -u -d "${SRCRUN:0:8} ${SRCRUN:8:2}:00" +%s) ) / 3600 ))
    if [[ ${EXP} == "ICON" && ${age} -gt 24 ]] || [[ ${EXP} == "IFS" && ${age} -gt 72 && ${IFS_SOURCE:-ecmwf} == "ecmwf" ]]
    then
-      echo -e "${RED}==>${NC} Warning: ${EXP} ${YYYYMMDDHHi} is ${age} h old and may no longer be online"
+      echo -e "${RED}==>${NC} Warning: ${EXP} ${SRCRUN} is ${age} h old and may no longer be online"
       echo -e "${RED}==>${NC} (ICON: last ~24 h; IFS: last ~2-3 days, or IFS_SOURCE=aws). Trying anyway...\n"
    fi
    # Python com numpy + eccodes (procura uma vez e exporta para os scripts filhos)
@@ -116,8 +134,8 @@ then
    cd ${SCRIPTS}
    if [[ ${EXP} == "ICON" ]]
    then
-      echo -e "${GREEN}==>${NC} Downloading ICON ${YYYYMMDDHHi} (+${FCST} h)...\n"
-      time ./get_icon_dwd.bash ${YYYYMMDDHHi} ${FCST}
+      echo -e "${GREEN}==>${NC} Downloading ICON ${SRCRUN} (+${START} to +$((START + FCST)) h)...\n"
+      time ICON_START=${START} ./get_icon_dwd.bash ${SRCRUN} $((START + FCST))
    else
       echo -e "${GREEN}==>${NC} Downloading IFS ${YYYYMMDDHHi} (+${FCST} h)...\n"
       time ./get_ifs_ecmwf.bash ${YYYYMMDDHHi} ${FCST}
