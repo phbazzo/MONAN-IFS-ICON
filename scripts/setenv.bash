@@ -120,11 +120,16 @@ export BLUE='\033[01;34m'  # Blue
 
 # Python com numpy + eccodes: ICON_PYTHON se definido; senao o primeiro ambiente conda do usuario
 # (ou o python3 do sistema) que importe os dois. Imprime o caminho; retorna 1 se nao achar.
+# Uso geral: find_python "<modulos>" <VARIAVEL>, ex.: find_python "numpy, netCDF4, cartopy" PLOT_PYTHON
+# (procura um Python que importe os modulos; a VARIAVEL, se definida, fixa o Python).
 find_python () {
    local cand cands
-   if [ -n "${ICON_PYTHON}" ]
+   local mods=${1:-"numpy, eccodes"}
+   local fixed=${ICON_PYTHON}
+   if [ -n "${2}" ]; then fixed=${!2}; fi
+   if [ -n "${fixed}" ]
    then
-      cands="${ICON_PYTHON}"
+      cands="${fixed}"
    else
       cands="$(ls -d ${HOME}/.conda/envs/*/bin/python ${HOME}/miniconda3/envs/*/bin/python \
                ${HOME}/miniforge3/envs/*/bin/python ${HOME}/anaconda3/envs/*/bin/python \
@@ -133,15 +138,14 @@ find_python () {
    for cand in ${cands}
    do
       [ -x "${cand}" ] || continue
-      if "${cand}" -c "import numpy, eccodes" > /dev/null 2>&1
+      if "${cand}" -c "import ${mods}" > /dev/null 2>&1
       then
          echo "${cand}"
          return 0
       fi
    done
-   echo -e "${RED}==>${NC} No Python with numpy + eccodes found (tried: ${cands})." >&2
-   echo -e "${RED}==>${NC} Set ICON_PYTHON=<.../bin/python> in setenv.bash, or create an env:" >&2
-   echo -e "${RED}==>${NC}    conda create -n grib -c conda-forge python numpy python-eccodes" >&2
+   echo -e "${RED}==>${NC} No Python with ${mods} found (tried: ${cands})." >&2
+   echo -e "${RED}==>${NC} Set ${2:-ICON_PYTHON}=<.../bin/python> in setenv.bash, or create a conda env with these modules." >&2
    return 1
 }
 
