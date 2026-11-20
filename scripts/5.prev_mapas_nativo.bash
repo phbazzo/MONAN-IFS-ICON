@@ -7,7 +7,7 @@ umask 022
 #     Os mesmos mapas do 5.prev_mapas.bash, lidos direto das saidas nativas do modelo
 #     (dataout/LABELI/RUNNAME/Model/MONAN_DIAG_*_MOD_*.nc), sem precisar do 4.run_post.bash.
 #     A grade lat-lon vem do latCell/lonCell do Pre/x1.RES.init.nc (ou datain/fixed/x1.RES.static.nc).
-#     Saida: dataout/LABELI/RUNNAME/Figs_nativo/
+#     Saida: dataout/LABELI/RUNNAME/Figs_nativo/{chuva6h,ambiente,refletividade}/
 #
 #     Variaveis: as do 5.prev_mapas.bash (PREV_ACUM, PREV_STEP, PREV_BOX, PREV_LABEL, PREV_NPROC,
 #     PREV_ONLY, PLOT_PYTHON) e PREV_DX (graus, vazio = ~ espacamento da malha).

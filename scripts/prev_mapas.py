@@ -16,6 +16,10 @@
 #            d) cisalhamento 0-1 km
 #            e) SRH 0-3 km, contornos da SRH 0-1 km
 #            f) agua precipitavel e vento a 10 m
+#        o refletividade maxima a 1 km na hora anterior (refl10cm_1km_max), de hora em hora,
+#          6 horas por figura: (+1..+6 h), (+7..+12 h), ...
+#
+#     Figuras em subpastas de --out: chuva<N>h/, ambiente/, refletividade/
 #
 #     SRH: o diagnostico do MPAS (mpas_convective_diagnostics.F) usa o movimento de
 #     Bunkers da tempestade que se desvia para a DIREITA e zera a helicidade negativa,
@@ -66,6 +70,15 @@ SH06_LEV = [10, 12.5, 15, 17.5, 20, 22.5, 25, 30, 35, 40]
 SH01_LEV = [5, 7.5, 10, 12.5, 15, 17.5, 20, 25, 30]
 SRH_LEV = [50, 100, 150, 200, 250, 300, 400, 500, 600]
 PW_LEV = [20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70]
+# Refletividade: escala do NWS (5 a 75 dBZ, de 5 em 5)
+REFL_LEV = list(range(5, 80, 5))
+REFL_COL = ["#04e9e7", "#019ff4", "#0300f4", "#02fd02", "#01c501", "#008e00", "#fdf802",
+            "#e5bc00", "#fd9500", "#fd0000", "#d40000", "#bc0000", "#f800fd", "#9854c6", "#fdfdfd"]
+REFL_VARS = {"refl": ["refl10cm_1km_max", "refl10cm_1km", "refl10cm_max"]}
+REFL_DESC = {"refl10cm_1km_max": "Refletividade maxima a 1 km na hora anterior",
+             "refl10cm_1km": "Refletividade a 1 km (instantanea)",
+             "refl10cm_max": "Refletividade maxima na coluna (instantanea)"}
+SUBDIR = {"ambiente": "ambiente", "refl": "refletividade"}   # chuva: chuva<N>h
 
 
 def discrete_cmap(name, levels, start=0.12):
@@ -290,7 +303,7 @@ def plot_rain(task):
     panel_title(ax, "a", f"Chuva acumulada em {acum} h: ({info0['val']:%d/%m %H}Z, "
                          f"{info['val']:%d/%m %H}Z]   max = {float(rain.max()):.0f} mm")
     suptitle(fig, label, info)
-    fname = os.path.join(out, f"chuva{acum}h_{info['ini']:%Y%m%d%H}_f{info['lead']:03d}.png")
+    fname = os.path.join(out, f"chuva{acum}h", f"chuva{acum}h_{info['ini']:%Y%m%d%H}_f{info['lead']:03d}.png")
     fig.savefig(fname, dpi=130, bbox_inches="tight")
     plt.close(fig)
     return fname
@@ -372,7 +385,50 @@ def plot_env(task):
 
     suptitle(fig, label, info)
     fig.subplots_adjust(wspace=0.06, hspace=0.12)
-    fname = os.path.join(out, f"ambiente_{info['ini']:%Y%m%d%H}_f{info['lead']:03d}.png")
+    fname = os.path.join(out, SUBDIR["ambiente"], f"ambiente_{info['ini']:%Y%m%d%H}_f{info['lead']:03d}.png")
+    fig.savefig(fname, dpi=120, bbox_inches="tight")
+    plt.close(fig)
+    return fname
+
+
+def plot_refl(task):
+    """6 paineis (2 x 3), um por hora, com uma barra de cores comum."""
+    infos, h0, grid, label, out = task          # infos: 6 itens (info ou None), prazos h0+1 .. h0+6
+    ratio = (grid.extent[1] - grid.extent[0]) / max(grid.extent[3] - grid.extent[2], 1e-6)
+    w = 17.0
+    fig = plt.figure(figsize=(w, 2 * (w / 3) / max(ratio, 0.5) + 1.6))
+    ax = make_axes(fig, 2, 3, grid.extent)
+    cmap, norm = discrete_cmap(REFL_COL, REFL_LEV)
+    cf, desc = None, REFL_DESC["refl10cm_1km_max"]
+    for i, info in enumerate(infos):
+        letter = "abcdef"[i]
+        if info is None:
+            panel_title(ax[i], letter, f"+{h0 + i + 1:03d} h")
+            unavailable(ax[i], "Horario")
+            continue
+        f = read_vars(info["path"], grid, REFL_VARS)
+        if f["refl"] is None:
+            panel_title(ax[i], letter, f"{info['val']:%d/%m %H}Z (+{info['lead']:03d} h)")
+            unavailable(ax[i], "Refletividade")
+            continue
+        desc = REFL_DESC.get(f["refl_name"], f["refl_name"])
+        z = np.ma.masked_less(f["refl"], REFL_LEV[0])
+        if z.count():
+            cf = ax[i].contourf(grid.lon, grid.lat, z, levels=REFL_LEV, cmap=cmap, norm=norm,
+                                extend="max", transform=DATA, zorder=2)
+        panel_title(ax[i], letter, f"{info['val']:%d/%m %H}Z (+{info['lead']:03d} h)   "
+                                   f"max = {float(f['refl'].max()):.0f} dBZ")
+    fig.subplots_adjust(wspace=0.06, hspace=0.12, bottom=0.10)
+    if cf is None:                               # nenhum eco >= 5 dBZ: barra mesmo assim
+        cf = plt.cm.ScalarMappable(norm=norm, cmap=cmap)
+    cax = fig.add_axes([0.25, 0.04, 0.5, 0.018])
+    cb = fig.colorbar(cf, cax=cax, orientation="horizontal", extend="max", ticks=REFL_LEV)
+    cb.ax.tick_params(labelsize=8)
+    cb.set_label("dBZ", fontsize=9)
+    last = next(x for x in reversed(infos) if x is not None)
+    fig.suptitle(f"{label}   |   Inicio {last['ini']:%d/%m/%Y %H}Z   |   {desc} (dBZ), "
+                 f"+{h0 + 1:03d} a +{h0 + 6:03d} h", fontsize=11, fontweight="bold")
+    fname = os.path.join(out, SUBDIR["refl"], f"refl_{last['ini']:%Y%m%d%H}_f{h0 + 1:03d}-f{h0 + 6:03d}.png")
     fig.savefig(fname, dpi=120, bbox_inches="tight")
     plt.close(fig)
     return fname
@@ -390,7 +446,7 @@ def parse_box(text):
 
 
 def main():
-    p = argparse.ArgumentParser(description="Mapas de previsao do MONAN: chuva acumulada e ambiente pre-convectivo")
+    p = argparse.ArgumentParser(description="Mapas de previsao do MONAN: chuva acumulada, ambiente pre-convectivo e refletividade")
     p.add_argument("--post-dir", required=True, help="pasta Post da rodada (MONAN_DIAG_*_POS_*.nc)")
     p.add_argument("--out", required=True, help="pasta das figuras")
     p.add_argument("--labeli", help="YYYYMMDDHH da rodada (obrigatorio se houver mais de uma na pasta)")
@@ -400,7 +456,7 @@ def main():
     p.add_argument("--box", type=parse_box, help="recorte W,E,S,N (use --box=...)")
     p.add_argument("--label", help="titulo da rodada, ex.: 'MONAN ICON L75'")
     p.add_argument("--nproc", type=int, default=4, help="figuras em paralelo")
-    p.add_argument("--only", choices=["chuva", "ambiente"], help="so um tipo de mapa")
+    p.add_argument("--only", choices=["chuva", "ambiente", "refl"], help="so um tipo de mapa")
     a = p.parse_args()
 
     files = list_files(a.post_dir, a.labeli, a.fcst)
@@ -408,22 +464,29 @@ def main():
     first = files[leads[0]]
     grid = Grid(first["path"], a.box)
     label = a.label or f"MONAN {first['exp']} x{first['grid']}"
-    os.makedirs(a.out, exist_ok=True)
+    for sub in (f"chuva{a.acum}h", SUBDIR["ambiente"], SUBDIR["refl"]):
+        os.makedirs(os.path.join(a.out, sub), exist_ok=True)
     print(f"Rodada {first['ini']:%Y%m%d%H}: {len(leads)} horarios (+{leads[0]} a +{leads[-1]} h), "
           f"grade recortada {grid.lat.size} x {grid.lon.size}")
 
-    rain_tasks, env_tasks = [], []
-    if a.only != "ambiente":
+    rain_tasks, env_tasks, refl_tasks = [], [], []
+    if a.only in (None, "chuva"):
         for h in leads:
             if h >= a.acum and h % a.acum == 0:
                 if h - a.acum in files:
                     rain_tasks.append((files[h], files[h - a.acum], a.acum, grid, label, a.out))
                 else:
                     print(f"  aviso: sem o arquivo de +{h - a.acum} h; pulando a chuva de +{h} h")
-    if a.only != "chuva":
+    if a.only in (None, "ambiente"):
         env_tasks = [(files[h], grid, label, a.out) for h in leads if h % a.step == 0]
+    if a.only in (None, "refl"):
+        # maximo "desde a saida anterior": o +0 h nao entra; blocos (+1..+6), (+7..+12), ...
+        for h0 in range(0, leads[-1], 6):
+            infos = [files.get(h) for h in range(h0 + 1, h0 + 7)]
+            if any(infos):
+                refl_tasks.append((infos, h0, grid, label, a.out))
 
-    if not rain_tasks and not env_tasks:
+    if not rain_tasks and not env_tasks and not refl_tasks:
         sys.exit("Nada a plotar (confira --acum, --step e os prazos disponiveis).")
 
     with Pool(max(1, a.nproc)) as pool:
@@ -431,7 +494,10 @@ def main():
             print("  ", fn)
         for fn in pool.imap(plot_env, env_tasks):
             print("  ", fn)
-    print(f"{len(rain_tasks)} mapas de chuva e {len(env_tasks)} de ambiente em {a.out}")
+        for fn in pool.imap(plot_refl, refl_tasks):
+            print("  ", fn)
+    print(f"{len(rain_tasks)} mapas de chuva, {len(env_tasks)} de ambiente e {len(refl_tasks)} de "
+          f"refletividade em {a.out}")
 
 
 if __name__ == "__main__":

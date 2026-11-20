@@ -11,7 +11,8 @@ umask 022
 #          cisalhamento 0-6 e 0-1 km, SRH 0-3 km (contornos 0-1 km), agua precipitavel e vento 10 m
 #
 #     Entrada: dataout/LABELI/RUNNAME/Post/MONAN_DIAG_*_POS_*.nc
-#     Saida:   dataout/LABELI/RUNNAME/Figs/{chuva6h,ambiente}_LABELI_fHHH.png
+#        o refletividade maxima a 1 km (refl10cm_1km_max) de hora em hora, 6 horas por figura
+#     Saida:   dataout/LABELI/RUNNAME/Figs/{chuva6h,ambiente,refletividade}/
 #
 #     Roda no no de login, sem fila. Na 1a vez o cartopy baixa costa/fronteiras/estados do
 #     Natural Earth (precisa de internet, como no login da JACI).
@@ -24,7 +25,7 @@ umask 022
 #        PREV_BOX   ("")  recorte "W,E,S,N" em graus, ex.: "-58,-47,-34,-22"; vazio = grade toda do pos
 #        PREV_LABEL ("")  titulo da rodada; vazio = "MONAN RUNNAME xRES"
 #        PREV_NPROC (4)   figuras em paralelo
-#        PREV_ONLY  ("")  chuva | ambiente: so um tipo de mapa
+#        PREV_ONLY  ("")  chuva | ambiente | refl: so um tipo de mapa
 #-----------------------------------------------------------------------------#
 
 if [ $# -ne 4 ]
