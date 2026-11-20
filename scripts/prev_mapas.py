@@ -103,13 +103,29 @@ def list_files(post_dir, labeli, fcst):
     return next(iter(found.values()))
 
 
+def find_coord(nc, kind, path):
+    """Coordenada 1D de latitude (kind="lat") ou longitude ("lon"): pelo nome ou pelas unidades."""
+    names = {"lat": ["latitude", "lat", "XLAT", "nav_lat", "y"],
+             "lon": ["longitude", "lon", "XLONG", "nav_lon", "x"]}[kind]
+    units = {"lat": ("degree_north", "degrees_north", "degree_N", "degrees_N"),
+             "lon": ("degree_east", "degrees_east", "degree_E", "degrees_E")}[kind]
+    for n in names:
+        if n in nc.variables:
+            return nc[n]
+    for v in nc.variables.values():
+        if getattr(v, "units", "") in units or getattr(v, "standard_name", "") == names[0]:
+            return v
+    sys.exit(f"Sem coordenada de {names[0]} em {path}.\n"
+             f"Dimensoes: {list(nc.dimensions)}\nVariaveis: {list(nc.variables)}")
+
+
 class Grid:
     """Grade lat-lon do pos, com longitudes em [-180, 180) e recorte opcional (W, E, S, N)."""
 
     def __init__(self, path, box):
         with netCDF4.Dataset(path) as nc:
-            lat = np.asarray(nc["latitude"][:], dtype=float)
-            lon = np.asarray(nc["longitude"][:], dtype=float)
+            lat = np.asarray(find_coord(nc, "lat", path)[:], dtype=float)
+            lon = np.asarray(find_coord(nc, "lon", path)[:], dtype=float)
         lon = np.where(lon >= 180.0, lon - 360.0, lon)
         ilon = np.argsort(lon, kind="stable")
         lon = lon[ilon]
