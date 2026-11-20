@@ -429,7 +429,7 @@ def plot_refl(task):
     fig.suptitle(f"{label}   |   Inicio {last['ini']:%d/%m/%Y %H}Z   |   {desc} (dBZ), "
                  f"+{h0 + 1:03d} a +{h0 + 6:03d} h", fontsize=11, fontweight="bold")
     fname = os.path.join(out, SUBDIR["refl"], f"refl_{last['ini']:%Y%m%d%H}_f{h0 + 1:03d}-f{h0 + 6:03d}.png")
-    fig.savefig(fname, dpi=120, bbox_inches="tight")
+    fig.savefig(fname, dpi=int(os.environ.get("REFL_DPI", 600)), bbox_inches="tight")
     plt.close(fig)
     return fname
 
