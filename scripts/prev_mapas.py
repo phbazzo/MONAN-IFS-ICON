@@ -169,12 +169,34 @@ def read_vars(path, grid, names):
     return out
 
 
-def total_rain(path, grid):
-    f = read_vars(path, grid, {"rainc": ["rainc"], "rainnc": ["rainnc"]})
+BUCKET = float(os.environ.get("RAIN_BUCKET", 100.0))   # config_bucket_rainc/rainnc do namelist (mm)
+
+
+def rain_parts(path, grid):
+    """rainc e rainnc; com i_rainc/i_rainnc no arquivo, ja somados de BUCKET * contador."""
+    f = read_vars(path, grid, {"rainc": ["rainc"], "rainnc": ["rainnc"],
+                               "i_rainc": ["i_rainc"], "i_rainnc": ["i_rainnc"]})
     if f["rainc"] is None and f["rainnc"] is None:
         sys.exit(f"{path}: sem rainc/rainnc")
-    parts = [f[k] for k in ("rainc", "rainnc") if f[k] is not None]
-    return sum(parts)
+    out = {}
+    for k in ("rainc", "rainnc"):
+        if f[k] is not None:
+            full = f["i_" + k] is not None
+            out[k] = (f[k] + BUCKET * f["i_" + k] if full else f[k], full)
+    return out
+
+
+def rain_window(path, path0, grid):
+    """Chuva total entre dois horarios. Sem os contadores i_rain*, o acumulado volta a zero ao
+    passar de BUCKET mm (config_bucket_rain*): diferenca negativa = uma passagem, soma BUCKET."""
+    now, before = rain_parts(path, grid), rain_parts(path0, grid)
+    total = 0.0
+    for k, (val, full) in now.items():
+        d = val - before[k][0]
+        if not full:
+            d = np.ma.where(d < -0.01, d + BUCKET, d)
+        total = total + d
+    return total
 
 
 # ---------------------------------------------------------------------------
@@ -259,7 +281,7 @@ def suptitle(fig, label, info, extra=""):
 
 def plot_rain(task):
     info, info0, acum, grid, label, out = task
-    rain = total_rain(info["path"], grid) - total_rain(info0["path"], grid)
+    rain = rain_window(info["path"], info0["path"], grid)
     rain = np.ma.maximum(rain, 0.0)
     ratio = (grid.extent[1] - grid.extent[0]) / max(grid.extent[3] - grid.extent[2], 1e-6)
     fig = plt.figure(figsize=(8.5, 8.5 / max(ratio, 0.5) + 1.2))
