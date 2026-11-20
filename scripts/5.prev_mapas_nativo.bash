@@ -78,7 +78,7 @@ echo -e "${GREEN}==>${NC} Forecast maps (native): ${nfiles} model files in ${POS
 echo -e "${GREEN}==>${NC} Mesh: ${MESH}"
 echo -e "${GREEN}==>${NC} Python: ${PYTHON}\n"
 
-${PYTHON} ${SCRIPTS}/prev_mapas.py \
+${PYTHON} ${SCRIPTS}/prev_mapas_nativo.py --mesh ${MESH} ${PREV_DX:+--dx ${PREV_DX}} \
    --post-dir ${POSTDIR} --out ${FIGDIR} \
    --labeli ${YYYYMMDDHHi} --fcst ${FCST} \
    --acum ${PREV_ACUM:-6} --step ${PREV_STEP:-3} --nproc ${PREV_NPROC:-4} \
