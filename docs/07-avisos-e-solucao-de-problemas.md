@@ -31,6 +31,8 @@ ncdump -h ${P}/x1.*.init.nc | grep -E "nVertLevels =|nCells ="
 | `CCE OpenMP fatal error: omp_set_num_threads attempted from non-OpenMP thread` | `cdo` do módulo da Cray | usar o `cdo` do conda ou `ICON_CDO` |
 | `ICON run ... not found at https://opendata.dwd.de/...` | rodada antiga ou ainda não publicada | usar outra rodada ou esperar |
 | `N files missing ... Run again to resume` | publicação incompleta ou horário inexistente | rodar de novo; conferir `LBCINT` e `FCST` |
+| `... is not on DWD yet: the last lead times are published ~3-4 h after the run hour` | o último prazo ainda não saiu no DWD (antes, o pré-processamento seguia, a conversão falhava no último horário e o `init_atmosphere` não começava) | rodar de novo mais tarde |
+| `ICON ... download failed or is incomplete` | algum arquivo não veio (ver as linhas `Missing:` acima) | rodar de novo: o que já veio é aproveitado |
 | `Too many levels for config_nfglevels = 80` | mais de 79 níveis do ICON | aumentar `ICON_THIN` |
 | `LABELI must be a 00, 06, 12 or 18 UTC run` | horário inválido | usar 00, 06, 12 ou 18 |
 | `IFS: LBCINT ... must be a multiple of 10800 s` | `LBCINT` incompatível | múltiplo de 3 h |

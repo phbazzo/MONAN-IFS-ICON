@@ -22,7 +22,9 @@ umask 022
 #        do namelist.init_atmosphere.TEMPLATE). Vai so UM nivel acima do topo.
 #        Ao mudar algum deles, apague o model_levels.txt da rodada.
 #
+#     ICON_DL_NPROC = downloads em paralelo (padrao: ICON_NPROC ou 32).
 #     Arquivos que falham sao baixados de novo ate ICON_RETRIES vezes (padrao 3).
+#     Sai com erro (status 1) se faltar algum arquivo.
 #     Rodar de novo e seguro: arquivos completos nao sao baixados outra vez
 #     (wget -c) e, depois de um download completo (marcador download_ok), o
 #     DWD nem e consultado.
@@ -71,7 +73,7 @@ BASEURL=https://opendata.dwd.de/weather/nwp/icon/grib/${YYYYMMDDHHi:8:2}
 OUT=${DATAIN}/ICON/${YYYYMMDDHHi};       mkdir -p ${OUT}
 ICONCDO=${DATAIN}/fixed/icon_cdo
 HHLDIR=${DATAIN}/fixed/icon_hhl
-NPROC=${ICON_NPROC:-32}
+NPROC=${ICON_DL_NPROC:-${ICON_NPROC:-32}}   # downloads em paralelo (ICON_DL_NPROC; o ICON_NPROC tambem vale para a conversao)
 VCOORD=${ICON_VCOORD:-model}
 PYTHON=$(find_python) || exit 1   # numpy + eccodes (ICON_PYTHON ou ambiente conda; ver setenv.bash)
 START=${ICON_START:-0}             # primeiro prazo (h) = CI; > 0: previsao do ICON como CI
@@ -241,6 +243,8 @@ done
 echo -e "${GREEN}==>${NC} Downloading $(wc -l < ${urls}) ICON files to ${OUT} ...\n"
 # Com ~10 mil arquivos e NPROC conexoes, sempre falha um ou outro (erro passageiro do DWD/rede).
 # Ate ICON_RETRIES novas passadas so com os que faltam, com menos conexoes e uma pausa entre elas.
+# Um wget que falha no meio (timeout) deixa o arquivo pela metade, que o teste -s abaixo daria como
+# baixado (e o bunzip2 do icon2wps.py falharia nele): por isso o arquivo e apagado quando o wget falha.
 missing=${OUT}/urls_missing.txt
 todo=${urls}; nproc=${NPROC}
 for ((pass=0; pass<=${ICON_RETRIES:-3}; pass++)); do
@@ -249,7 +253,7 @@ for ((pass=0; pass<=${ICON_RETRIES:-3}; pass++)); do
       echo -e "${GREEN}==>${NC} Retry ${pass}: $(wc -l < ${missing}) files missing, downloading again in 20 s..."
       sleep 20; todo=${missing}; nproc=8
    fi
-   xargs -P ${nproc} -n 1 wget -q -c --tries=3 --timeout=60 -P ${OUT} < ${todo}
+   xargs -P ${nproc} -n 1 sh -c 'wget -q -c --tries=3 --timeout=60 -P "$0" "$1" || rm -f "$0/${1##*/}"' ${OUT} < ${todo}
    # Confere se veio tudo (horarios que ainda nao sairam no DWD tambem aparecem aqui)
    : > ${missing}.new
    while read url; do
@@ -260,6 +264,23 @@ for ((pass=0; pass<=${ICON_RETRIES:-3}; pass++)); do
 done
 nmiss=$(wc -l < ${missing})
 sed 's/^/Missing: /' ${missing}
+if [ ${nmiss} -ne 0 ]
+then
+   # Resumo por prazo e diagnostico: o arquivo ainda nao saiu no DWD (404) ou foi falha passageira?
+   echo -e "\n${RED}==>${NC} Missing files by lead time:"
+   grep -o "_${YYYYMMDDHHi}_[0-9][0-9][0-9]_" ${missing} | cut -d_ -f3 | sort | uniq -c | \
+      awk '{printf "      +%d h: %d files\n", $2, $1}'
+   url1=$(head -1 ${missing})
+   wget -q --spider --timeout=60 ${url1}; rc=$?
+   if [ ${rc} -eq 8 ]
+   then
+      echo -e "${RED}==>${NC} $(basename ${url1}) is not on DWD yet: the last lead times are published"
+      echo -e "${RED}==>${NC} ~3-4 h after the run hour. Run again later."
+   elif [ ${rc} -eq 0 ]
+   then
+      echo -e "${RED}==>${NC} $(basename ${url1}) is on DWD: transient network/DWD error."
+   fi
+fi
 rm -f ${missing}
 nlev=$(grep -c "_${sfff}_[0-9]*_T\.grib2" ${urls})
 nsoil=$(grep -c "soil-level_${YYYYMMDDHHi}_${soilfff}_" ${urls})

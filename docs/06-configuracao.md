@@ -26,6 +26,8 @@ Use os mesmos valores de `RUN_TAG`, `NVERTLEV` e `LBCINT` nas etapas 2, 3 e 4.
 | `ICON_ZTOP` | `config_ztop` | topo para escolher os níveis |
 | `ICON_BOX` | `-95,-25,-60,15` | recorte |
 | `ICON_NPROC` | `32` / `8` | processos no download / na conversão |
+| `ICON_DL_NPROC` | `128` (no `setenv.bash`) | downloads em paralelo do ICON (só o download) |
+| `ICON_RETRIES` | `3` | novas tentativas dos arquivos que faltam |
 | `IFS_RESOL` | `0p1` | `0p1`, `0p25`, `0p4-beta` |
 | `IFS_SOURCE` | `ecmwf` | `ecmwf` ou `aws` |
 | `IFS_NPROC` | `8` | downloads em paralelo |

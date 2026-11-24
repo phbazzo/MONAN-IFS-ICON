@@ -140,6 +140,14 @@ then
       echo -e "${GREEN}==>${NC} Downloading IFS ${YYYYMMDDHHi} (+${FCST} h)...\n"
       time ./get_ifs_ecmwf.bash ${YYYYMMDDHHi} ${FCST}
    fi
+   # Sem isto, um download incompleto (ex.: ultimo prazo ainda nao publicado) so aparecia depois,
+   # como falha na conversao do ultimo horario, e o init_atmosphere nem comecava
+   if [ $? -ne 0 ]
+   then
+      echo -e "\n${RED}==>${NC} ${EXP} ${SRCRUN} download failed or is incomplete (see the messages above)."
+      echo -e "${RED}==>${NC} Run this script again to resume: files already downloaded are kept.\n"
+      exit -1
+   fi
 fi
 
 
@@ -273,12 +281,17 @@ else
    echo -e  "${RED}==>${NC} Exiting script. \n"
    exit -1
 fi
+if [ $? -ne 0 ]
+then
+   echo -e "\n${RED}==>${NC} Degrib phase failed for ${EXP} (see the messages above). Exiting script.\n"
+   exit -1
+fi
 #----------------------------------------------------------------------------------
 
 # Init Atmosphere phase:------------------------------------------------------------
 if [[ ${EXP} == "GFS" || ${EXP} == "ERA" || ${EXP} == "ICON" || ${EXP} == "IFS" ]]; then
    echo -e  "\n${GREEN}==>${NC} Submitting Init Atmosphere for real case...\n"
-   time ./make_initatmos.bash ${EXP} ${RES} ${YYYYMMDDHHi} ${FCST}
+   time ./make_initatmos.bash ${EXP} ${RES} ${YYYYMMDDHHi} ${FCST} || exit -1
 else
    echo -e  "\n${RED}==>${NC} ***** ATTENTION *****\n"
    echo -e  "${RED}==>${NC} Init Atmosphere phase fails! Please select EXP=GFS, EXP=ERA, EXP=ICON or EXP=IFS.\n"
@@ -289,7 +302,7 @@ fi
 
 # LBCs phase:------------------------------------------------------------
 if [[ $MODERUN == "R" ]]; then
-   time ./make_lbcs.bash ${EXP} ${RES} ${YYYYMMDDHHi} ${FCST}
+   time ./make_lbcs.bash ${EXP} ${RES} ${YYYYMMDDHHi} ${FCST} || exit -1
 elif [[ $MODERUN == "G" ]]; then
    : # it doesn't need the LBC (lateral boundary conditions)
 else

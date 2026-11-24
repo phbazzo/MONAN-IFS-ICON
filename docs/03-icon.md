@@ -75,5 +75,7 @@ Em outra região, defina uma caixa alguns graus maior que a malha, com longitude
 | `ICON_ZTOP` | `config_ztop` | topo para escolher os níveis |
 | `ICON_BOX` | `-95,-25,-60,15` | recorte |
 | `ICON_NPROC` | `32` / `8` | processos no download / na conversão |
+| `ICON_DL_NPROC` | `128` (no `setenv.bash`) | downloads em paralelo (só o download) |
+| `ICON_RETRIES` | `3` | novas tentativas dos arquivos que faltam (a cada 20 s) |
 
 Exemplo: `ICON_BOX=-20,40,-40,10 ./2.pre_processing.bash ICON ...`.

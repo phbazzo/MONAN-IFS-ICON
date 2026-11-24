@@ -22,6 +22,8 @@ export RUN_TAG=${RUN_TAG:-}
 export ICON_PYTHON=${ICON_PYTHON:-}
 # cdo do ICON: vazio = o cdo do mesmo ambiente conda do ICON_PYTHON (o modulo cdo/2.4.2 da Cray falha)
 export ICON_CDO=${ICON_CDO:-}
+# Downloads do ICON em paralelo (so o download; a conversao usa ICON_NPROC, padrao 8)
+export ICON_DL_NPROC=${ICON_DL_NPROC:-128}
 
 # Choose your compiler here (only on Jaci; on Egeon the compiler is fixed to ‘gnu’):
 export COMPILER=intel
