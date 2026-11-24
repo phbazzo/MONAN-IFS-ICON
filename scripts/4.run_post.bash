@@ -313,11 +313,16 @@ do
    hh=${YYYYMMDDHHi:8:2}
    currentdate=\$(date -d "${YYYYMMDDHHi:0:8} \${hh}:00:00 \$(echo "(\${i}-1)*${t_strout:0:2}" | bc) hours \$(echo "(\${i}-1)*${t_strout:3:2}" | bc) minutes \$(echo "(\${i}-1)*${t_strout:6:2}" | bc) seconds" +"%Y%m%d%H.%M.%S")
    diag_name=MONAN_DIAG_${RORG}_MOD_${EXP}_${YYYYMMDDHHi}_\${currentdate}.x${RES}L${N_MODEL_LEV}.nc
+   # O convert_mpas (1.2.0) tira o horario do Time (units = "hours since ...") do NOME do arquivo,
+   # em posicoes fixas que so batem com EXP de 3 letras (GFS, ERA, IFS); com ICON sai lixo.
+   # O nome padrao do MPAS (diag.AAAA-MM-DD_hh.mm.ss.nc) funciona com qualquer EXP.
+   diag_link=diag.\${currentdate:0:4}-\${currentdate:4:2}-\${currentdate:6:2}_\${currentdate:8:2}.\${currentdate:11:2}.\${currentdate:14:2}.nc
+   ln -sf ${OUTRUN}/Model/\${diag_name} \${diag_link}
    echo ""
    echo "executando convert mpas"
    chmod 755 ${OUTRUN}/Model/*
-   time  ./convert_mpas x1.${RES}.init.nc ${OUTRUN}/Model/\${diag_name}  > convert_mpas.output & 
-   echo "./convert_mpas x1.${RES}.init.nc ${OUTRUN}/Model/\${diag_name} > convert_mpas.output"
+   time  ./convert_mpas x1.${RES}.init.nc \${diag_link}  > convert_mpas.output &
+   echo "./convert_mpas x1.${RES}.init.nc \${diag_link} (-> ${OUTRUN}/Model/\${diag_name}) > convert_mpas.output"
 done
 
 # necessario aguardar as rodadas em background

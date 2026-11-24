@@ -46,5 +46,7 @@ ncdump -h ${P}/x1.*.init.nc | grep -E "nVertLevels =|nCells ="
 | `Simulation parameters for resolution/mesh ... have not been set` | malha sem entrada no `3.run_model.bash` | incluir `CONFIG_DT` e `CONFIG_CONV_INTERVAL` |
 | `Convert_MPAS parameters for resolution/mesh ... have not been set` | malha sem entrada no `4.run_post.bash` | incluir a grade de saída |
 | `u10`, `v10`, `t2m` e `q2` absurdos (~ -1e30) só em +0 h (ICON/IFS) | erro do `init_atmosphere` 2.0.0-rc: na interpolação desses campos para as células, corrige a longitude só de um lado, e o recorte do ICON/IFS (longitude inicial negativa, ex.: -95) não cobre o `lonCell` da malha (0 a 360) | `cd scripts && ./patch_monan.bash init` (corrige o fonte e recompila só o `init_atmosphere`); depois refazer o `2.pre_processing.bash` e o modelo |
+| Pós do ICON com `Time:units = "hours since _202-61-11 90:.0:.0"`; GrADS/CDO não abrem ou dão a data errada | o `convert_mpas` lê a data do nome do arquivo em posições fixas, que só valem para `EXP` de 3 letras | refazer o `4.run_post.bash` atual (passa ao `convert_mpas` um link `diag.AAAA-MM-DD_hh.mm.ss.nc`) |
+| `.ctl` do pós vazio ou com `tdef` errado em rodada L75 | o `make_template.bash` procurava arquivos `L55` | refazer o `4.run_post.bash` atual |
 | `ECCODES ERROR : pack_bytes: Wrong size (20) for section2Padding` | arquivos do DWD | pode ignorar |
 | `bunzip2: ... trailing garbage after EOF ignored` | arquivos do DWD | pode ignorar |

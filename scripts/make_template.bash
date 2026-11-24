@@ -74,7 +74,7 @@ START_HH="${YYYYMMDDHHi:8:2}"
 maxpostpernode=20    # <------ qtde max de convert_mpas por no!
 VARTABLE=".OPER"
 export DIRRUN=${DIRHOMED}/run.${YYYYMMDDHHi}.${RUNNAME}; rm -fr ${DIRRUN}; mkdir -p ${DIRRUN}
-N_MODEL_LEV=55
+N_MODEL_LEV=${NVERTLEV:?NVERTLEV not set in setenv.bash}   # o mesmo L<N> do nome dos arquivos do 4.run_post.bash
 #-------------------------------------------------------
 
 # Variables for flex outpout interval from streams.atmosphere------------------------
