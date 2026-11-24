@@ -145,8 +145,13 @@ else
 fi
 
 
+# Desfaz as correcoes do patch_monan.bash antes do checkout (senao o git pode recusar trocar de versao)
+if [ -d ${MONANDIR}/.git ]; then git -C ${MONANDIR} checkout -- src/core_init_atmosphere/mpas_init_atm_cases.F 2>/dev/null; fi
 checkout_system ${MONANDIR} ${github_link_MONAN} ${tag_or_branch_name_MONAN}
 checkout_system ${CONVERT_MPAS_DIR} ${github_link_CONVERT_MPAS} ${tag_or_branch_name_CONVERT_MPAS}
+
+# Correcoes no fonte do MONAN antes de compilar (u10/v10/t2m/q2 da CI com ICON/IFS; ver patch_monan.bash)
+(cd ${SCRIPTS} && ./patch_monan.bash) || exit -1
 
 rm -rf $MONANDIR/default_inputs/ $MONANDIR/src/core_atmosphere/physics/physics_wrf/files
 rm -f  $MONANDIR/stream_list.* $MONANDIR/streams.* $MONANDIR/namelist.* 

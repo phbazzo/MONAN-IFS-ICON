@@ -397,6 +397,8 @@ def write_record(f, payload):
 
 def write_field(f, hdate, geo, field, units, desc, xlvl, slab):
     lat1, lon1, dlat, dlon, nj, ni = geo
+    # Nao adianta gravar lon1 em [0, 360): o map_set do init_atmosphere volta para [-180, 180].
+    # O u10/v10/t2m/q2 absurdos em +0 h sao corrigidos no fonte do MONAN (patch_monan.bash).
     write_record(f, struct.pack(">i", 5))
     write_record(f, struct.pack(">24sf32s9s25s46sf3i",
                                 hdate.ljust(24).encode(), 0.0, b"DWD ICON".ljust(32),

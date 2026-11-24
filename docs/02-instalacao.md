@@ -18,6 +18,10 @@ cd scripts_CD-CT/scripts
 A pasta precisa se chamar `scripts_CD-CT`, e os scripts precisam rodar de dentro de `scripts_CD-CT/scripts`. Se
 instalar outro branch do modelo, mude `MONAN_BRANCH` no `setenv.bash`.
 
+Antes de compilar, o `1.install_monan.bash` aplica no fonte do MONAN as correções do `patch_monan.bash`
+(hoje: `u10`, `v10`, `t2m` e `q2` da condição inicial com ICON/IFS). Numa instalação já feita, rode
+`./patch_monan.bash init`: aplica as correções e recompila só o `init_atmosphere_model`.
+
 Depois confira:
 
 1. `setenv.bash`: `MODERUN`, `LBCINT`, `COMPILER`, `NVERTLEV` e `ZETA_LEVELS`.
